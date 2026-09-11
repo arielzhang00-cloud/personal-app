@@ -135,8 +135,11 @@
     btn.addEventListener('click', function () { dlg.showModal(); });
     dlg.querySelector('#acc-close').addEventListener('click', function () { dlg.close(); });
     dlg.querySelector('#acc-out').addEventListener('click', function () {
-      global.Auth.signOut();
-      dlg.close();
+      // Clear the local copy too, so the next account on this device starts clean.
+      global.DB.wipe().then(function () {
+        global.Auth.signOut();
+        location.reload();
+      });
     });
   }
 

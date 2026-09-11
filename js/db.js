@@ -159,6 +159,12 @@
       });
     },
 
+    /** Drops every local record, e.g. when switching accounts on a shared device. */
+    wipe: function () {
+      return tx(STORE, 'readwrite', function (store) { return store.clear(); })
+        .then(function () { return tx(META, 'readwrite', function (store) { return store.clear(); }); });
+    },
+
     meta: function (key, value) {
       if (value === undefined) {
         return tx(META, 'readonly', function (store) { return store.get(key); })
