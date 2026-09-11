@@ -25,11 +25,20 @@
     };
   }
 
+  /* Record ids are only unique per user, so they are namespaced by user id before
+     going to the backend, where id is the primary key. */
+  function remoteId(userId, id) { return userId + ':' + id; }
+
+  function localId(userId, id) {
+    var prefix = userId + ':';
+    return id.indexOf(prefix) === 0 ? id.slice(prefix.length) : id;
+  }
+
   function push(token, userId, rows) {
     if (!rows.length) return Promise.resolve();
     var body = rows.map(function (r) {
       return {
-        id: r.id,
+        id: remoteId(userId, r.id),
         user_id: userId,
         collection: r.collection,
         data: r.data,
@@ -45,7 +54,7 @@
     });
   }
 
-  function pull(token) {
+  function pull(token, userId) {
     return global.DB.meta('lastPull').then(function (since) {
       var url = cfg.SUPABASE_URL + '/rest/v1/' + cfg.TABLE + '?select=*&order=updated_at.asc';
       if (since) url += '&updated_at=gt.' + encodeURIComponent(since);
@@ -58,7 +67,7 @@
           if (!newest || r.updated_at > newest) newest = r.updated_at;
           return chain.then(function () {
             return global.DB.put(r.collection, {
-              id: r.id, data: r.data, deleted: r.deleted, updatedAt: r.updated_at
+              id: localId(userId, r.id), data: r.data, deleted: r.deleted, updatedAt: r.updated_at
             }, { fromRemote: true });
           });
         }, Promise.resolve()).then(function () {
@@ -103,7 +112,7 @@
         if (!token) { setStatus('offline', 'sign in to sync'); return; }
         return global.DB.pending()
           .then(function (rows) { return push(token, user.id, rows); })
-          .then(function () { return pull(token); })
+          .then(function () { return pull(token, user.id); })
           .then(function () { setStatus('synced', 'synced'); });
       }).catch(function (err) {
         console.warn('[sync]', err);
