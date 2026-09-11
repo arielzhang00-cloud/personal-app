@@ -1,6 +1,7 @@
-/* Minimal Supabase auth over REST: email + password, session stored locally and
-   refreshed in the background so a device stays signed in indefinitely.
-   Row-level security keys off the returned user id. */
+/* Minimal Supabase auth over REST. Accounts are a user ID plus a 4-digit PIN; both
+   are mapped onto an internal Supabase email/password pair, so no email is involved.
+   The session is stored locally and refreshed in the background, so a device signs in
+   once. Row-level security keys off the returned user id. */
 (function (global) {
   'use strict';
 
@@ -57,6 +58,17 @@
       }).catch(function () { return null; });
   }
 
+  var USER_DOMAIN = 'lifehub.app';
+
+  function handle(userId) {
+    return String(userId).trim().toLowerCase().replace(/[^a-z0-9._-]/g, '-');
+  }
+
+  function credentials(userId, pin) {
+    var id = handle(userId);
+    return { email: id + '@' + USER_DOMAIN, password: 'lifehub:' + id + ':' + String(pin) };
+  }
+
   function post(path, body) {
     return fetch(cfg.SUPABASE_URL + path, {
       method: 'POST',
@@ -88,22 +100,34 @@
       return refresh().then(function (s) { return s ? s.access_token : null; });
     },
 
-    signIn: function (email, password) {
-      return post('/auth/v1/token?grant_type=password', { email: email, password: password })
+    /** Display name for the account, i.e. what the user typed as their user ID. */
+    name: function () {
+      if (!session || !session.email) return null;
+      return session.email.split('@')[0];
+    },
+
+    signIn: function (userId, pin) {
+      return post('/auth/v1/token?grant_type=password', credentials(userId, pin))
         .then(function (json) {
           var s = fromTokenResponse(json);
-          if (!s) throw new Error('sign-in failed');
+          if (!s) throw new Error('Could not sign in.');
           save(s);
           return Auth.user();
+        })
+        .catch(function (err) {
+          throw new Error(/invalid login/i.test(err.message) ? 'Wrong user ID or PIN.' : err.message);
         });
     },
 
-    signUp: function (email, password) {
-      return post('/auth/v1/signup', { email: email, password: password })
+    signUp: function (userId, pin) {
+      return post('/auth/v1/signup', credentials(userId, pin))
         .then(function (json) {
           var s = fromTokenResponse(json);
           if (s) { save(s); return Auth.user(); }
-          return null; // email confirmation required
+          return null;
+        })
+        .catch(function (err) {
+          throw new Error(/already/i.test(err.message) ? 'That user ID is taken — sign in instead.' : err.message);
         });
     },
 

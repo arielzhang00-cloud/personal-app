@@ -26,10 +26,11 @@ lets you enter how much of it to add to the day; values are scaled from the serv
 
 ## Backend
 
-Everything is written to IndexedDB first, then pushed to Supabase. Sign in with an
-email and password (top-right) to sync a device; the session is stored on the device
-and refreshed in the background, so each device is signed in once. Signed out, the
-app still works and keeps every input locally. Conflicts resolve last-write-wins on
+Accounts are a user ID plus a 4-digit PIN, entered on the landing screen; internally
+they map to a Supabase email/password pair (`<user-id>@lifehub.app`), so no email is
+involved. The session is stored on the device and refreshed in the background, so each
+device signs in once. Everything is written to IndexedDB first, then pushed to
+Supabase, so the app keeps working offline. Conflicts resolve last-write-wins on
 `updated_at`.
 
 The project's connection details live in `js/config.js`. The anon key there is a
@@ -49,8 +50,9 @@ create policy "own rows" on records for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 ```
 
-Supabase → Authentication → Providers → Email must have email sign-in enabled. Turn
-off "Confirm email" to sign in immediately after creating an account.
+Supabase → Authentication → Sign In / Providers → Email: keep email sign-in enabled and
+turn **"Confirm email" off** — the addresses are synthetic, so confirmation mail can
+never be delivered and account creation fails while it is on.
 
 ## Local development
 

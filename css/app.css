@@ -230,3 +230,32 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); }
 .empty { color: var(--muted); text-align: center; padding: 18px; }
 
 .notes-area { min-height: 220px; resize: vertical; }
+
+/* Sign-in gate */
+.gate {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--bg);
+}
+body.locked .gate { display: flex; }
+body.locked > .topbar, body.locked > main { visibility: hidden; }
+
+.gate-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 22px 20px;
+  display: grid;
+  gap: 12px;
+}
+.gate-card h2 { margin: 0; font-size: 1.4rem; }
+.gate-actions { display: grid; gap: 8px; margin-top: 4px; }
+.gate-actions button { width: 100%; }
+.gate-msg { min-height: 1em; color: var(--accent); }

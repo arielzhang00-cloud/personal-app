@@ -49,83 +49,101 @@
     return node;
   }
 
-  /* Account control in the top bar: email + password sign-in drives cross-device sync.
-     The session persists on the device, so signing in once is enough. */
+  /* Landing gate: the app is only shown once a user ID + PIN account is signed in on
+     this device. The session persists locally, so this appears once per device. */
+  function mountGate() {
+    if (!global.Auth || !global.Auth.enabled()) return;
+
+    var gate = el('div', { class: 'gate', id: 'gate' });
+    gate.innerHTML =
+      '<form class="gate-card" id="gate-form">' +
+      '<h2>Life Hub</h2>' +
+      '<p class="hint" id="gate-state">Sign in with your user ID and 4-digit PIN.</p>' +
+      '<label class="field">User ID<input id="gate-id" autocomplete="username" autocapitalize="none" placeholder="ariel"></label>' +
+      '<label class="field">PIN<input id="gate-pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="current-password" placeholder="4 digits"></label>' +
+      '<p class="hint gate-msg" id="gate-msg"></p>' +
+      '<div class="gate-actions">' +
+      '<button class="primary" id="gate-in" type="submit">Sign in</button>' +
+      '<button class="ghost" id="gate-new" type="button">Create account</button>' +
+      '</div>' +
+      '</form>';
+    document.body.appendChild(gate);
+
+    var idInput = gate.querySelector('#gate-id');
+    var pinInput = gate.querySelector('#gate-pin');
+    var msg = gate.querySelector('#gate-msg');
+
+    function busy(text) {
+      msg.textContent = text;
+      gate.querySelector('#gate-in').disabled = !!text;
+      gate.querySelector('#gate-new').disabled = !!text;
+    }
+
+    function submit(create) {
+      var id = idInput.value.trim();
+      var pin = pinInput.value.trim();
+      if (!id) { msg.textContent = 'Enter a user ID.'; return; }
+      if (!/^\d{4}$/.test(pin)) { msg.textContent = 'PIN must be 4 digits.'; return; }
+      busy(create ? 'Creating account…' : 'Signing in…');
+      (create ? global.Auth.signUp(id, pin) : global.Auth.signIn(id, pin))
+        .then(function (user) {
+          busy('');
+          if (!user) msg.textContent = 'Account created — sign in to continue.';
+        })
+        .catch(function (err) { busy(''); msg.textContent = err.message; });
+    }
+
+    gate.querySelector('#gate-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      submit(false);
+    });
+    gate.querySelector('#gate-new').addEventListener('click', function () { submit(true); });
+
+    global.Auth.onChange(function (user) {
+      document.body.classList.toggle('locked', !user);
+      if (user) { idInput.value = ''; pinInput.value = ''; msg.textContent = ''; }
+      if (global.Sync) global.Sync.run();
+    });
+  }
+
+  /* Account control in the top bar: shows who is signed in and signs out. */
   function mountAccount() {
     var bar = document.querySelector('.topbar');
     if (!bar || !global.Auth || !global.Auth.enabled()) return;
 
-    var btn = el('button', { class: 'ghost account-btn' }, ['Sign in']);
+    var btn = el('button', { class: 'ghost account-btn' }, ['Account']);
     bar.appendChild(btn);
 
     var dlg = el('dialog', { id: 'dlg-account' });
     dlg.innerHTML =
       '<div class="modal-head">Account</div>' +
-      '<div class="modal-body">' +
-      '<p class="hint" id="acc-state"></p>' +
-      '<label class="field">Email<input type="email" id="acc-email" autocomplete="username" placeholder="you@example.com"></label>' +
-      '<label class="field">Password<input type="password" id="acc-pass" autocomplete="current-password" placeholder="at least 6 characters"></label>' +
-      '<p class="hint" id="acc-msg" style="margin-top:10px"></p>' +
-      '</div>' +
+      '<div class="modal-body"><p class="hint" id="acc-state"></p></div>' +
       '<div class="modal-foot">' +
       '<button class="ghost" id="acc-close">Close</button>' +
       '<button class="danger" id="acc-out">Sign out</button>' +
-      '<button class="ghost" id="acc-new">Create account</button>' +
-      '<button class="primary" id="acc-in">Sign in</button>' +
       '</div>';
     document.body.appendChild(dlg);
 
-    function refreshUi(user) {
-      btn.textContent = user && user.email ? user.email.split('@')[0] : (user ? 'Signed in' : 'Sign in');
-      var state = dlg.querySelector('#acc-state');
-      var out = dlg.querySelector('#acc-out');
-      var fields = dlg.querySelectorAll('.field');
-      if (state) {
-        state.textContent = user
-          ? 'Signed in' + (user.email ? ' as ' + user.email : '') + ' — this device stays signed in and syncs automatically.'
-          : 'Sign in to sync this device with your other devices. Everything keeps working offline either way.';
-      }
-      if (out) out.style.display = user ? '' : 'none';
-      Array.prototype.forEach.call(fields, function (f) { f.style.display = user ? 'none' : ''; });
-      ['#acc-in', '#acc-new'].forEach(function (sel) {
-        var b = dlg.querySelector(sel);
-        if (b) b.style.display = user ? 'none' : '';
-      });
-      if (global.Sync) global.Sync.run();
-    }
-
-    global.Auth.onChange(refreshUi);
+    global.Auth.onChange(function (user) {
+      btn.textContent = global.Auth.name() || 'Account';
+      dlg.querySelector('#acc-state').textContent = user
+        ? 'Signed in as ' + (global.Auth.name() || 'you') +
+          ' — this device stays signed in and syncs automatically.'
+        : 'Signed out.';
+    });
 
     btn.addEventListener('click', function () { dlg.showModal(); });
     dlg.querySelector('#acc-close').addEventListener('click', function () { dlg.close(); });
     dlg.querySelector('#acc-out').addEventListener('click', function () {
       global.Auth.signOut();
       dlg.close();
-      if (global.Sync) global.Sync.run();
-    });
-
-    function submit(create) {
-      var email = dlg.querySelector('#acc-email').value.trim();
-      var pass = dlg.querySelector('#acc-pass').value;
-      var msg = dlg.querySelector('#acc-msg');
-      if (!email || !pass) { msg.textContent = 'Enter your email and password.'; return; }
-      msg.textContent = create ? 'Creating account…' : 'Signing in…';
-      (create ? global.Auth.signUp(email, pass) : global.Auth.signIn(email, pass))
-        .then(function (user) {
-          if (user) { msg.textContent = ''; dlg.close(); }
-          else msg.textContent = 'Account created — check ' + email + ' to confirm it, then sign in.';
-        })
-        .catch(function (err) { msg.textContent = err.message; });
-    }
-
-    dlg.querySelector('#acc-in').addEventListener('click', function () { submit(false); });
-    dlg.querySelector('#acc-new').addEventListener('click', function () { submit(true); });
-    dlg.querySelector('#acc-pass').addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') submit(false);
     });
   }
 
-  document.addEventListener('DOMContentLoaded', mountAccount);
+  document.addEventListener('DOMContentLoaded', function () {
+    mountAccount();
+    mountGate();
+  });
 
   global.App = { todayISO: todayISO, num: num, round: round, autosave: autosave, el: el };
 })(window);
