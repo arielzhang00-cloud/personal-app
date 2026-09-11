@@ -16,6 +16,30 @@
     return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   }
 
+  var DAY_KEY = 'lifehub:day';
+  var DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+  /** The day the whole app is currently looking at: ?d= wins, then the last
+   *  day picked on any page, then today. */
+  function selectedDay() {
+    var fromUrl = new URLSearchParams(location.search).get('d');
+    if (DAY_RE.test(fromUrl || '')) return fromUrl;
+    var stored = null;
+    try { stored = localStorage.getItem(DAY_KEY); } catch (e) { stored = null; }
+    return DAY_RE.test(stored || '') ? stored : todayISO();
+  }
+
+  /** Makes the current URL point at `day` so the page is shareable and the
+   *  choice carries to the other sections. */
+  function setSelectedDay(day) {
+    var value = DAY_RE.test(day || '') ? day : todayISO();
+    try { localStorage.setItem(DAY_KEY, value); } catch (e) { /* private mode */ }
+    var url = new URL(location.href);
+    url.searchParams.set('d', value);
+    history.replaceState(null, '', url.toString());
+    return value;
+  }
+
   function num(value) {
     var n = parseFloat(value);
     return isFinite(n) ? n : 0;
@@ -148,5 +172,13 @@
     mountGate();
   });
 
-  global.App = { todayISO: todayISO, num: num, round: round, autosave: autosave, el: el };
+  global.App = {
+    todayISO: todayISO,
+    selectedDay: selectedDay,
+    setSelectedDay: setSelectedDay,
+    num: num,
+    round: round,
+    autosave: autosave,
+    el: el
+  };
 })(window);

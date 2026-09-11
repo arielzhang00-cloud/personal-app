@@ -12,7 +12,7 @@
 
   var COLORS = ['#4da3ff', '#f2b544', '#5fd39b', '#f2726f', '#b78bff', '#4fd2e0', '#f58fc2', '#9ab04a'];
 
-  var state = { day: App.todayISO(), view: 'month', entries: [], saved: [] };
+  var state = { day: App.selectedDay(), view: 'month', entries: [], saved: [] };
 
   /* ---------------- range ---------------- */
 
@@ -360,7 +360,8 @@
   document.addEventListener('DOMContentLoaded', function () {
     $('day').value = state.day;
     $('day').addEventListener('change', function () {
-      state.day = $('day').value || App.todayISO();
+      state.day = App.setSelectedDay($('day').value);
+      $('day').value = state.day;
       renderSummary();
       renderTable();
     });

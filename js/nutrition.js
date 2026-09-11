@@ -10,7 +10,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var num = App.num, round = App.round;
 
-  var state = { day: App.todayISO(), entries: [], saved: [], weights: [], range: 7 };
+  var state = { day: App.selectedDay(), entries: [], saved: [], weights: [], range: 7 };
 
   /* ---------------- totals ---------------- */
 
@@ -334,7 +334,8 @@
   document.addEventListener('DOMContentLoaded', function () {
     $('day').value = state.day;
     $('day').addEventListener('change', function () {
-      state.day = $('day').value || App.todayISO();
+      state.day = App.setSelectedDay($('day').value);
+      $('day').value = state.day;
       load();
     });
 
