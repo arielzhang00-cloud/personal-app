@@ -46,6 +46,30 @@
     { key: 'fiber', label: 'Fiber', type: 'number' }
   ];
 
+  /** The saved item a row came from, matched by id and falling back to the
+   *  name so rows logged before an item was saved still rescale. */
+  function savedFor(entry) {
+    var byId = entry.savedId && state.saved.filter(function (s) { return s.id === entry.savedId; })[0];
+    if (byId) return byId;
+    var name = (entry.name || '').trim().toLowerCase();
+    if (!name) return null;
+    return state.saved.filter(function (s) { return (s.name || '').toLowerCase() === name; })[0] || null;
+  }
+
+  /** Recomputes calories/protein/fiber from the saved item's per-serving values. */
+  function rescale(entry) {
+    var item = savedFor(entry);
+    if (!item) return false;
+    var serving = num(item.serving) || 1;
+    var qty = item.basis === 'g' ? num(entry.grams) : num(entry.count);
+    if (!qty) qty = num(entry.grams) || num(entry.count);
+    var factor = qty / serving;
+    entry.calories = round(num(item.calories) * factor, 1);
+    entry.protein = round(num(item.protein) * factor, 1);
+    entry.fiber = round(num(item.fiber) * factor, 1);
+    return true;
+  }
+
   function renderTable() {
     var body = $('food-body');
     body.innerHTML = '';
@@ -61,6 +85,7 @@
     }
     state.entries.forEach(function (entry) {
       var tr = document.createElement('tr');
+      var inputs = {};
       COLUMNS.forEach(function (col) {
         var td = document.createElement('td');
         td.setAttribute('data-label', col.label);
@@ -70,9 +95,15 @@
         input.value = entry[col.key] === undefined || entry[col.key] === null ? '' : entry[col.key];
         input.addEventListener('input', function () {
           entry[col.key] = input.value;
+          if ((col.key === 'grams' || col.key === 'count') && rescale(entry)) {
+            ['calories', 'protein', 'fiber'].forEach(function (k) {
+              if (inputs[k]) inputs[k].value = entry[k];
+            });
+          }
           renderTotals();
           saveEntry(entry);
         });
+        inputs[col.key] = input;
         td.appendChild(input);
         tr.appendChild(td);
       });
@@ -385,6 +416,7 @@
         if (action === 'add' && item) {
           return addEntry({
             name: item.name,
+            savedId: item.id,
             grams: payload.grams,
             count: payload.count,
             calories: payload.calories,
