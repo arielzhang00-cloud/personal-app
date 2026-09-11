@@ -26,31 +26,28 @@ lets you enter how much of it to add to the day; values are scaled from the serv
 
 ## Backend
 
-Out of the box everything persists locally in IndexedDB. To sync across devices,
-create a Supabase project with:
+Everything is written to IndexedDB first, then pushed to Supabase. Sign in with an
+email magic link (top-right) to sync a device; signed out, the app still works and
+keeps every input locally. Conflicts resolve last-write-wins on `updated_at`.
+
+The project's connection details live in `js/config.js`. The anon key there is a
+public, browser-safe key — privacy comes from row-level security:
 
 ```sql
 create table records (
   id text primary key,
+  user_id uuid not null default auth.uid() references auth.users on delete cascade,
   collection text not null,
   data jsonb not null,
   deleted boolean not null default false,
   updated_at timestamptz not null default now()
 );
+alter table records enable row level security;
+create policy "own rows" on records for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
 ```
 
-then fill in `js/config.js`:
-
-```js
-window.LIFE_HUB_CONFIG = {
-  BACKEND: 'supabase',
-  SUPABASE_URL: 'https://xxxx.supabase.co',
-  SUPABASE_ANON_KEY: 'public-anon-key',
-  TABLE: 'records'
-};
-```
-
-Conflicts resolve last-write-wins on `updated_at`.
+Add the deployed site URL to Supabase → Authentication → URL Configuration → Redirect URLs.
 
 ## Local development
 

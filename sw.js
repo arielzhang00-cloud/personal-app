@@ -17,6 +17,7 @@ var PRECACHE = [
   'offline.html',
   'css/app.css',
   'js/config.js',
+  'js/auth.js',
   'js/db.js',
   'js/sync.js',
   'js/app.js',
