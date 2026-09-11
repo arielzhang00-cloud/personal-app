@@ -17,23 +17,27 @@
   }
 
   var DAY_KEY = 'lifehub:day';
-  var DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+  var DAY_RE = /^(19|20|21)\d{2}-\d{2}-\d{2}$/;
 
-  /** The day the whole app is currently looking at: ?d= wins, then the last
-   *  day picked on any page, then today. */
+  /** The day the whole app is currently looking at: ?d= wins, then a day picked
+   *  earlier today on another page, then today. A day picked yesterday is not
+   *  carried over, so every page rolls to the new date on the device's clock. */
   function selectedDay() {
     var fromUrl = new URLSearchParams(location.search).get('d');
     if (DAY_RE.test(fromUrl || '')) return fromUrl;
     var stored = null;
-    try { stored = localStorage.getItem(DAY_KEY); } catch (e) { stored = null; }
-    return DAY_RE.test(stored || '') ? stored : todayISO();
+    try { stored = JSON.parse(localStorage.getItem(DAY_KEY)); } catch (e) { stored = null; }
+    if (stored && stored.setOn === todayISO() && DAY_RE.test(stored.day || '')) return stored.day;
+    return todayISO();
   }
 
   /** Makes the current URL point at `day` so the page is shareable and the
    *  choice carries to the other sections. */
   function setSelectedDay(day) {
     var value = DAY_RE.test(day || '') ? day : todayISO();
-    try { localStorage.setItem(DAY_KEY, value); } catch (e) { /* private mode */ }
+    try {
+      localStorage.setItem(DAY_KEY, JSON.stringify({ day: value, setOn: todayISO() }));
+    } catch (e) { /* private mode */ }
     var url = new URL(location.href);
     url.searchParams.set('d', value);
     history.replaceState(null, '', url.toString());

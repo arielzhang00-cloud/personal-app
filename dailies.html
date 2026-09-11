@@ -9,7 +9,7 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/app.css">
 </head>
-<body data-section="dailies">
+<body>
 <header class="topbar">
   <a class="back-link" href="index.html">‹ Home</a>
   <h1>Dailies</h1>
@@ -18,15 +18,36 @@
 
 <main class="page">
   <section class="card">
-    <div id="items"></div>
-    <div class="row" style="margin-top:12px">
-      <button id="add-item" class="primary">+ Add entry</button>
+    <div class="row">
+      <label class="field grow">Day
+        <input type="date" id="day">
+      </label>
+      <div class="total grow">
+        <div class="value" id="t-done">0 / 0</div>
+        <div class="label">Done today</div>
+      </div>
     </div>
+    <div class="hint" id="range-label"></div>
   </section>
 
   <section class="card">
-    <div class="section-title">Notes</div>
-    <textarea id="notes" class="notes-area" placeholder="Anything you want to keep for Dailies…"></textarea>
+    <div class="table-wrap">
+      <table id="daily-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Description</th>
+            <th>Done</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="daily-body"></tbody>
+      </table>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button id="btn-add-row" class="primary">+ Add daily</button>
+    </div>
+    <div class="hint">Checkboxes are per day — everything starts unchecked again tomorrow.</div>
   </section>
 </main>
 
@@ -35,6 +56,6 @@
 <script src="js/db.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/app.js"></script>
-<script src="js/section.js"></script>
+<script src="js/dailies.js"></script>
 </body>
 </html>

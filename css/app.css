@@ -246,7 +246,11 @@ tfoot td { font-weight: 700; }
 #spend-table th:nth-child(2), #spend-table th:nth-child(3) { text-align: left; }
 #spend-table td[data-label="Item"] input,
 #spend-table td[data-label="Category"] input { text-align: left; }
-tr.reimbursed { opacity: .55; }
+tr.reimbursed, tr.done { opacity: .55; }
+tr.done input[type="text"], tr.done input[type="date"] { text-decoration: line-through; }
+#daily-table td input[type="text"], #whimsy-table td input[type="text"] { text-align: left; }
+#daily-table th, #whimsy-table th { text-align: left; }
+#daily-table th:nth-last-child(-n+2), #whimsy-table th:nth-last-child(-n+2) { text-align: right; }
 td.line-total { font-variant-numeric: tabular-nums; }
 .check-field { display: flex; flex-direction: row; align-items: center; gap: 8px; align-self: end; padding-bottom: 6px; }
 .check-field input { width: auto; }
