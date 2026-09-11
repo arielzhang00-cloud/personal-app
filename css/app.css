@@ -209,6 +209,49 @@ tfoot td { font-weight: 700; }
 .ranges button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #07121d; }
 #weight-chart { width: 100%; height: 260px; display: block; }
 
+/* ---- stacked spending bar ---- */
+.stackbar {
+  display: flex;
+  width: 100%;
+  height: 38px;
+  margin-top: 14px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.stackbar.empty-bar { opacity: .5; }
+.stack-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #07121d;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.stack-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 6px 16px;
+  margin-top: 12px;
+}
+.legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; }
+.swatch { width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; }
+.legend-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legend-val { margin-left: auto; color: var(--muted); white-space: nowrap; }
+
+#spend-table.no-date .col-date { display: none; }
+#spend-table th:nth-child(2), #spend-table th:nth-child(3) { text-align: left; }
+#spend-table td[data-label="Item"] input,
+#spend-table td[data-label="Category"] input { text-align: left; }
+tr.reimbursed { opacity: .55; }
+td.line-total { font-variant-numeric: tabular-nums; }
+.check-field { display: flex; flex-direction: row; align-items: center; gap: 8px; align-self: end; padding-bottom: 6px; }
+.check-field input { width: auto; }
+td[data-label="Reimbursed"] input { width: 18px; }
+
 /* ---- modal ---- */
 dialog {
   border: 1px solid var(--border);
