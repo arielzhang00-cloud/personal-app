@@ -102,7 +102,7 @@ a { color: inherit; text-decoration: none; }
 @media (hover: hover) {
   .tile:hover { border-color: var(--accent); background: var(--surface-2); }
 }
-.tile-icon { font-size: 1.9rem; line-height: 1; }
+.tile-icon { width: 30px; height: 30px; color: var(--accent); }
 .tile-label { font-size: 1rem; font-weight: 600; }
 
 /* ---- generic building blocks ---- */
