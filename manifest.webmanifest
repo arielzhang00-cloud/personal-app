@@ -1,0 +1,14 @@
+{
+  "name": "Life Hub",
+  "short_name": "Life Hub",
+  "description": "Offline-first personal tracker: dailies, nutrition, exercise, events, budgeting, gifts, focus, whimsy.",
+  "start_url": "index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f1216",
+  "theme_color": "#111418",
+  "orientation": "any",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

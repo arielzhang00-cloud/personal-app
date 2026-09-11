@@ -1,0 +1,413 @@
+/* Nutrition page: day picker + weight, live totals, saved-item library,
+   editable food table and a weight chart with range toggles. */
+(function () {
+  'use strict';
+
+  var ENTRIES = 'nutrition-entries';
+  var SAVED = 'saved-items';
+  var WEIGHTS = 'weights';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var num = App.num, round = App.round;
+
+  var state = { day: App.todayISO(), entries: [], saved: [], weights: [], range: 7 };
+
+  /* ---------------- totals ---------------- */
+
+  function renderTotals() {
+    var cal = 0, pro = 0, fib = 0;
+    state.entries.forEach(function (e) {
+      cal += num(e.calories); pro += num(e.protein); fib += num(e.fiber);
+    });
+    $('t-cal').textContent = round(cal, 0);
+    $('t-pro').textContent = round(pro, 1);
+    $('t-fib').textContent = round(fib, 1);
+    $('f-cal').textContent = round(cal, 0);
+    $('f-pro').textContent = round(pro, 1);
+    $('f-fib').textContent = round(fib, 1);
+    var w = weightFor(state.day);
+    $('t-wt').textContent = w === null ? '—' : round(w, 1);
+  }
+
+  function weightFor(day) {
+    var row = state.weights.filter(function (w) { return w.date === day; })[0];
+    return row && row.weight !== '' && row.weight !== null && row.weight !== undefined
+      ? num(row.weight) : null;
+  }
+
+  /* ---------------- food table ---------------- */
+
+  var COLUMNS = [
+    { key: 'name', label: 'Item', type: 'text' },
+    { key: 'grams', label: 'Quantity (g)', type: 'number' },
+    { key: 'count', label: 'Quantity (ct)', type: 'number' },
+    { key: 'calories', label: 'Calories', type: 'number' },
+    { key: 'protein', label: 'Protein', type: 'number' },
+    { key: 'fiber', label: 'Fiber', type: 'number' }
+  ];
+
+  function renderTable() {
+    var body = $('food-body');
+    body.innerHTML = '';
+    if (!state.entries.length) {
+      var tr = document.createElement('tr');
+      var td = document.createElement('td');
+      td.colSpan = 7;
+      td.className = 'empty';
+      td.textContent = 'Nothing logged yet — add a row or pick a saved item.';
+      tr.appendChild(td);
+      body.appendChild(tr);
+      return;
+    }
+    state.entries.forEach(function (entry) {
+      var tr = document.createElement('tr');
+      COLUMNS.forEach(function (col) {
+        var td = document.createElement('td');
+        td.setAttribute('data-label', col.label);
+        var input = document.createElement('input');
+        input.type = col.type;
+        if (col.type === 'number') { input.step = '0.01'; input.inputMode = 'decimal'; }
+        input.value = entry[col.key] === undefined || entry[col.key] === null ? '' : entry[col.key];
+        input.addEventListener('input', function () {
+          entry[col.key] = input.value;
+          renderTotals();
+          saveEntry(entry);
+        });
+        td.appendChild(input);
+        tr.appendChild(td);
+      });
+      var actions = document.createElement('td');
+      actions.setAttribute('data-label', '');
+      var del = document.createElement('button');
+      del.className = 'danger';
+      del.textContent = 'Delete';
+      del.addEventListener('click', function () {
+        DB.remove(ENTRIES, entry.id).then(load);
+      });
+      actions.appendChild(del);
+      tr.appendChild(actions);
+      body.appendChild(tr);
+    });
+  }
+
+  var saveEntry = App.autosave(function (entry) {
+    DB.put(ENTRIES, entry);
+  }, 400);
+
+  function addEntry(values) {
+    var entry = Object.assign({ date: state.day, name: '', grams: '', count: '', calories: '', protein: '', fiber: '' }, values);
+    return DB.put(ENTRIES, entry).then(load);
+  }
+
+  /* ---------------- saved items ---------------- */
+
+  function renderSavedOptions() {
+    var list = $('saved-list');
+    list.innerHTML = '';
+    state.saved.slice().sort(function (a, b) { return a.name.localeCompare(b.name); })
+      .forEach(function (item) {
+        var opt = document.createElement('option');
+        opt.value = item.name;
+        opt.label = round(num(item.calories), 0) + ' cal / ' + item.serving + (item.basis === 'g' ? 'g' : ' ct');
+        list.appendChild(opt);
+      });
+  }
+
+  function renderSavedManager() {
+    var wrap = $('s-list');
+    wrap.innerHTML = '';
+    if (!state.saved.length) {
+      wrap.innerHTML = '<div class="empty">No saved items yet.</div>';
+      return;
+    }
+    state.saved.slice().sort(function (a, b) { return a.name.localeCompare(b.name); })
+      .forEach(function (item) {
+        var row = App.el('div', { class: 'row', style: 'justify-content:space-between;margin-bottom:8px' }, [
+          App.el('div', {}, [
+            App.el('div', { style: 'font-weight:600' }, [item.name]),
+            App.el('div', { class: 'hint' }, [
+              'per ' + item.serving + (item.basis === 'g' ? ' g' : ' ct') + ' · ' +
+              round(num(item.calories), 0) + ' cal · ' + round(num(item.protein), 1) + 'p · ' +
+              round(num(item.fiber), 1) + 'f'
+            ])
+          ]),
+          App.el('div', { class: 'row' }, [
+            App.el('button', {
+              class: 'ghost',
+              onclick: function () { $('dlg-saved').close(); openItemDialog(item); }
+            }, ['Edit']),
+            App.el('button', {
+              class: 'danger',
+              onclick: function () { DB.remove(SAVED, item.id).then(load).then(renderSavedManager); }
+            }, ['Delete'])
+          ])
+        ]);
+        wrap.appendChild(row);
+      });
+  }
+
+  /* ---------------- item popup ---------------- */
+
+  var editing = null;
+
+  function openItemDialog(item) {
+    editing = item || null;
+    $('dlg-item-title').textContent = item ? item.name : 'New item';
+    $('i-name').value = item ? item.name : '';
+    $('i-basis').value = item ? item.basis : 'g';
+    $('i-serving').value = item ? item.serving : 100;
+    $('i-cal').value = item ? item.calories : 0;
+    $('i-pro').value = item ? item.protein : 0;
+    $('i-fib').value = item ? item.fiber : 0;
+    $('a-g').value = '';
+    $('a-ct').value = '';
+    updatePreview();
+    $('dlg-item').showModal();
+  }
+
+  function scaled() {
+    var basis = $('i-basis').value;
+    var serving = num($('i-serving').value) || 1;
+    var qty = basis === 'g' ? num($('a-g').value) : num($('a-ct').value);
+    if (!qty) qty = num($('a-g').value) || num($('a-ct').value);
+    var factor = qty / serving;
+    return {
+      factor: factor,
+      grams: $('a-g').value,
+      count: $('a-ct').value,
+      calories: round(num($('i-cal').value) * factor, 1),
+      protein: round(num($('i-pro').value) * factor, 1),
+      fiber: round(num($('i-fib').value) * factor, 1)
+    };
+  }
+
+  function updatePreview() {
+    var s = scaled();
+    $('a-preview').textContent = s.factor
+      ? 'Adds ' + s.calories + ' cal · ' + s.protein + ' g protein · ' + s.fiber + ' g fiber'
+      : 'Enter a quantity to add this to today.';
+  }
+
+  ['i-basis', 'i-serving', 'i-cal', 'i-pro', 'i-fib', 'a-g', 'a-ct'].forEach(function (id) {
+    document.addEventListener('DOMContentLoaded', function () {
+      $(id).addEventListener('input', updatePreview);
+    });
+  });
+
+  function saveItemFromDialog() {
+    var item = {
+      id: editing ? editing.id : undefined,
+      name: $('i-name').value.trim(),
+      basis: $('i-basis').value,
+      serving: num($('i-serving').value) || 1,
+      calories: num($('i-cal').value),
+      protein: num($('i-pro').value),
+      fiber: num($('i-fib').value)
+    };
+    if (!item.name) return Promise.resolve(null);
+    return DB.put(SAVED, item).then(function (id) {
+      item.id = id;
+      return item;
+    });
+  }
+
+  /* ---------------- weight chart ---------------- */
+
+  function pointsForRange(days) {
+    var end = new Date(state.day + 'T00:00:00');
+    var start = new Date(end.getTime() - (days - 1) * 86400000);
+    return state.weights
+      .filter(function (w) {
+        var d = new Date(w.date + 'T00:00:00');
+        return d >= start && d <= end && w.weight !== '' && w.weight !== null;
+      })
+      .map(function (w) { return { date: w.date, t: new Date(w.date + 'T00:00:00').getTime(), v: num(w.weight) }; })
+      .sort(function (a, b) { return a.t - b.t; });
+  }
+
+  function drawChart() {
+    var canvas = $('weight-chart');
+    var dpr = window.devicePixelRatio || 1;
+    var cssW = canvas.clientWidth || 320;
+    var cssH = 260;
+    canvas.width = cssW * dpr;
+    canvas.height = cssH * dpr;
+    var ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssW, cssH);
+
+    var pts = pointsForRange(state.range);
+    var hint = $('chart-hint');
+    if (pts.length === 0) {
+      ctx.fillStyle = '#97a3b0';
+      ctx.font = '14px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('No weight logged in this range yet.', cssW / 2, cssH / 2);
+      hint.textContent = '';
+      return;
+    }
+
+    var padL = 44, padR = 12, padT = 14, padB = 26;
+    var w = cssW - padL - padR, h = cssH - padT - padB;
+    var end = new Date(state.day + 'T00:00:00').getTime();
+    var start = end - (state.range - 1) * 86400000;
+    var vals = pts.map(function (p) { return p.v; });
+    var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+    if (max - min < 1) { min -= 1; max += 1; }
+    var padV = (max - min) * 0.12;
+    min -= padV; max += padV;
+
+    var x = function (t) { return padL + (state.range === 1 ? w / 2 : ((t - start) / (end - start)) * w); };
+    var y = function (v) { return padT + h - ((v - min) / (max - min)) * h; };
+
+    ctx.strokeStyle = '#2b343e';
+    ctx.fillStyle = '#97a3b0';
+    ctx.lineWidth = 1;
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (var i = 0; i <= 4; i++) {
+      var v = min + ((max - min) * i) / 4;
+      var yy = y(v);
+      ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL + w, yy); ctx.stroke();
+      ctx.fillText(round(v, 1), padL - 8, yy);
+    }
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    [start, (start + end) / 2, end].forEach(function (t) {
+      var d = new Date(t);
+      ctx.fillText((d.getMonth() + 1) + '/' + d.getDate(), x(t), padT + h + 7);
+    });
+
+    ctx.strokeStyle = '#4da3ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    pts.forEach(function (p, i) {
+      var px = x(p.t), py = y(p.v);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    ctx.fillStyle = '#4da3ff';
+    pts.forEach(function (p) {
+      ctx.beginPath();
+      ctx.arc(x(p.t), y(p.v), 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    var first = pts[0].v, last = pts[pts.length - 1].v;
+    var delta = round(last - first, 1);
+    hint.textContent = pts.length + ' entries · ' + round(first, 1) + ' → ' + round(last, 1) +
+      ' lb (' + (delta > 0 ? '+' : '') + delta + ')';
+  }
+
+  /* ---------------- load / wire ---------------- */
+
+  function load() {
+    return Promise.all([DB.all(ENTRIES), DB.all(SAVED), DB.all(WEIGHTS)])
+      .then(function (res) {
+        state.entries = res[0].filter(function (e) { return e.date === state.day; })
+          .sort(function (a, b) { return (a.updatedAt || '').localeCompare(b.updatedAt || ''); });
+        state.saved = res[1];
+        state.weights = res[2];
+        var w = weightFor(state.day);
+        if (document.activeElement !== $('weight')) $('weight').value = w === null ? '' : w;
+        renderTotals();
+        renderTable();
+        renderSavedOptions();
+        drawChart();
+      });
+  }
+
+  var saveWeight = App.autosave(function (value) {
+    DB.put(WEIGHTS, { id: 'weight-' + state.day, date: state.day, weight: value })
+      .then(function () {
+        return DB.all(WEIGHTS).then(function (rows) {
+          state.weights = rows;
+          renderTotals();
+          drawChart();
+        });
+      });
+  }, 400);
+
+  document.addEventListener('DOMContentLoaded', function () {
+    $('day').value = state.day;
+    $('day').addEventListener('change', function () {
+      state.day = $('day').value || App.todayISO();
+      load();
+    });
+
+    $('weight').addEventListener('input', function () {
+      saveWeight($('weight').value);
+    });
+
+    $('btn-add-row').addEventListener('click', function () { addEntry({}); });
+
+    $('saved-picker').addEventListener('change', function () {
+      var name = $('saved-picker').value.trim();
+      if (!name) return;
+      var item = state.saved.filter(function (s) { return s.name.toLowerCase() === name.toLowerCase(); })[0];
+      $('saved-picker').value = '';
+      openItemDialog(item || { name: name, basis: 'g', serving: 100, calories: 0, protein: 0, fiber: 0 });
+    });
+
+    $('btn-saved').addEventListener('click', function () {
+      renderSavedManager();
+      $('dlg-saved').showModal();
+    });
+    $('s-close').addEventListener('click', function () { $('dlg-saved').close(); });
+
+    $('s-add').addEventListener('click', function () {
+      var name = $('s-name').value.trim();
+      if (!name) { $('s-name').focus(); return; }
+      DB.put(SAVED, {
+        name: name,
+        basis: $('s-basis').value,
+        serving: num($('s-serving').value) || 1,
+        calories: num($('s-cal').value),
+        protein: num($('s-pro').value),
+        fiber: num($('s-fib').value)
+      }).then(load).then(function () {
+        ['s-name'].forEach(function (id) { $(id).value = ''; });
+        ['s-cal', 's-pro', 's-fib'].forEach(function (id) { $(id).value = 0; });
+        $('s-serving').value = 100;
+        renderSavedManager();
+      });
+    });
+
+    $('dlg-item').addEventListener('close', function () {
+      var action = $('dlg-item').returnValue;
+      if (action !== 'save' && action !== 'add') return;
+      var payload = scaled();
+      saveItemFromDialog().then(function (item) {
+        if (action === 'add' && item) {
+          return addEntry({
+            name: item.name,
+            grams: payload.grams,
+            count: payload.count,
+            calories: payload.calories,
+            protein: payload.protein,
+            fiber: payload.fiber
+          });
+        }
+        return load();
+      });
+    });
+
+    window.addEventListener('resize', App.autosave(drawChart, 150));
+
+    Array.prototype.forEach.call($('ranges').querySelectorAll('button'), function (btn) {
+      btn.addEventListener('click', function () {
+        state.range = parseInt(btn.dataset.range, 10);
+        Array.prototype.forEach.call($('ranges').querySelectorAll('button'), function (b) {
+          b.setAttribute('aria-pressed', String(b === btn));
+        });
+        drawChart();
+      });
+    });
+
+    DB.onChange(ENTRIES, function () {});
+    load();
+  });
+})();
