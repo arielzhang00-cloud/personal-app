@@ -49,7 +49,8 @@
     return node;
   }
 
-  /* Account control in the top bar: magic-link sign-in drives cross-device sync. */
+  /* Account control in the top bar: email + password sign-in drives cross-device sync.
+     The session persists on the device, so signing in once is enough. */
   function mountAccount() {
     var bar = document.querySelector('.topbar');
     if (!bar || !global.Auth || !global.Auth.enabled()) return;
@@ -62,13 +63,15 @@
       '<div class="modal-head">Account</div>' +
       '<div class="modal-body">' +
       '<p class="hint" id="acc-state"></p>' +
-      '<label class="field">Email<input type="email" id="acc-email" placeholder="you@example.com"></label>' +
+      '<label class="field">Email<input type="email" id="acc-email" autocomplete="username" placeholder="you@example.com"></label>' +
+      '<label class="field">Password<input type="password" id="acc-pass" autocomplete="current-password" placeholder="at least 6 characters"></label>' +
       '<p class="hint" id="acc-msg" style="margin-top:10px"></p>' +
       '</div>' +
       '<div class="modal-foot">' +
       '<button class="ghost" id="acc-close">Close</button>' +
       '<button class="danger" id="acc-out">Sign out</button>' +
-      '<button class="primary" id="acc-send">Email me a link</button>' +
+      '<button class="ghost" id="acc-new">Create account</button>' +
+      '<button class="primary" id="acc-in">Sign in</button>' +
       '</div>';
     document.body.appendChild(dlg);
 
@@ -76,14 +79,18 @@
       btn.textContent = user && user.email ? user.email.split('@')[0] : (user ? 'Signed in' : 'Sign in');
       var state = dlg.querySelector('#acc-state');
       var out = dlg.querySelector('#acc-out');
-      var send = dlg.querySelector('#acc-send');
+      var fields = dlg.querySelectorAll('.field');
       if (state) {
         state.textContent = user
-          ? 'Signed in' + (user.email ? ' as ' + user.email : '') + ' — your data syncs to every device you sign in on.'
+          ? 'Signed in' + (user.email ? ' as ' + user.email : '') + ' — this device stays signed in and syncs automatically.'
           : 'Sign in to sync this device with your other devices. Everything keeps working offline either way.';
       }
       if (out) out.style.display = user ? '' : 'none';
-      if (send) send.style.display = user ? 'none' : '';
+      Array.prototype.forEach.call(fields, function (f) { f.style.display = user ? 'none' : ''; });
+      ['#acc-in', '#acc-new'].forEach(function (sel) {
+        var b = dlg.querySelector(sel);
+        if (b) b.style.display = user ? 'none' : '';
+      });
       if (global.Sync) global.Sync.run();
     }
 
@@ -96,16 +103,25 @@
       dlg.close();
       if (global.Sync) global.Sync.run();
     });
-    dlg.querySelector('#acc-send').addEventListener('click', function () {
+
+    function submit(create) {
       var email = dlg.querySelector('#acc-email').value.trim();
+      var pass = dlg.querySelector('#acc-pass').value;
       var msg = dlg.querySelector('#acc-msg');
-      if (!email) { msg.textContent = 'Enter your email first.'; return; }
-      msg.textContent = 'Sending…';
-      global.Auth.signIn(email).then(function () {
-        msg.textContent = 'Check ' + email + ' for a sign-in link.';
-      }).catch(function (err) {
-        msg.textContent = 'Could not send the link: ' + err.message;
-      });
+      if (!email || !pass) { msg.textContent = 'Enter your email and password.'; return; }
+      msg.textContent = create ? 'Creating account…' : 'Signing in…';
+      (create ? global.Auth.signUp(email, pass) : global.Auth.signIn(email, pass))
+        .then(function (user) {
+          if (user) { msg.textContent = ''; dlg.close(); }
+          else msg.textContent = 'Account created — check ' + email + ' to confirm it, then sign in.';
+        })
+        .catch(function (err) { msg.textContent = err.message; });
+    }
+
+    dlg.querySelector('#acc-in').addEventListener('click', function () { submit(false); });
+    dlg.querySelector('#acc-new').addEventListener('click', function () { submit(true); });
+    dlg.querySelector('#acc-pass').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') submit(false);
     });
   }
 

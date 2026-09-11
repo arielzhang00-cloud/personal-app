@@ -1,5 +1,6 @@
-/* Minimal Supabase auth over REST: email magic link, token stored locally so the
-   app stays signed in offline. Row-level security keys off the returned user id. */
+/* Minimal Supabase auth over REST: email + password, session stored locally and
+   refreshed in the background so a device stays signed in indefinitely.
+   Row-level security keys off the returned user id. */
 (function (global) {
   'use strict';
 
@@ -31,22 +32,6 @@
     };
   }
 
-  function parseHash() {
-    if (!location.hash || location.hash.indexOf('access_token') === -1) return false;
-    var params = new URLSearchParams(location.hash.slice(1));
-    var s = {
-      access_token: params.get('access_token'),
-      refresh_token: params.get('refresh_token'),
-      expires_at: Math.floor(Date.now() / 1000) + parseInt(params.get('expires_in') || '3600', 10),
-      email: null,
-      user_id: null
-    };
-    save(s);
-    history.replaceState(null, '', location.pathname + location.search);
-    fetchUser();
-    return true;
-  }
-
   function fetchUser() {
     if (!session) return Promise.resolve(null);
     return fetch(cfg.SUPABASE_URL + '/auth/v1/user', {
@@ -72,6 +57,19 @@
       }).catch(function () { return null; });
   }
 
+  function post(path, body) {
+    return fetch(cfg.SUPABASE_URL + path, {
+      method: 'POST',
+      headers: { apikey: cfg.SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (json) {
+        if (!r.ok) throw new Error(json.msg || json.error_description || json.message || 'request failed');
+        return json;
+      });
+    });
+  }
+
   var Auth = {
     enabled: function () { return !!(cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY); },
 
@@ -90,24 +88,35 @@
       return refresh().then(function (s) { return s ? s.access_token : null; });
     },
 
-    signIn: function (email) {
-      var redirect = location.origin + location.pathname;
-      return fetch(cfg.SUPABASE_URL + '/auth/v1/otp?redirect_to=' + encodeURIComponent(redirect), {
-        method: 'POST',
-        headers: { apikey: cfg.SUPABASE_ANON_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email, create_user: true })
-      }).then(function (r) {
-        if (!r.ok) return r.json().then(function (e) { throw new Error(e.msg || e.error_description || 'sign-in failed'); });
-        return true;
-      });
+    signIn: function (email, password) {
+      return post('/auth/v1/token?grant_type=password', { email: email, password: password })
+        .then(function (json) {
+          var s = fromTokenResponse(json);
+          if (!s) throw new Error('sign-in failed');
+          save(s);
+          return Auth.user();
+        });
+    },
+
+    signUp: function (email, password) {
+      return post('/auth/v1/signup', { email: email, password: password })
+        .then(function (json) {
+          var s = fromTokenResponse(json);
+          if (s) { save(s); return Auth.user(); }
+          return null; // email confirmation required
+        });
     },
 
     signOut: function () { save(null); }
   };
 
   load();
-  parseHash();
-  if (session) { fetchUser(); }
+  if (session) {
+    fetchUser();
+    // Keep the refresh token alive so a signed-in device never has to sign in again.
+    setInterval(function () { Auth.token(); }, 10 * 60 * 1000);
+    window.addEventListener('online', function () { Auth.token(); });
+  }
 
   global.Auth = Auth;
 })(window);
