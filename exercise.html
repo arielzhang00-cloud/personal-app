@@ -9,7 +9,7 @@
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/app.css">
 </head>
-<body data-section="exercise">
+<body>
 <header class="topbar">
   <a class="back-link" href="index.html">‹ Home</a>
   <h1>Exercise</h1>
@@ -18,15 +18,47 @@
 
 <main class="page">
   <section class="card">
-    <div id="items"></div>
+    <div class="row">
+      <label class="field grow">Workout
+        <select id="workout-picker"></select>
+      </label>
+      <label class="field grow">Name
+        <input type="text" id="workout-name" placeholder="Workout name">
+      </label>
+    </div>
     <div class="row" style="margin-top:12px">
-      <button id="add-item" class="primary">+ Add entry</button>
+      <button id="btn-new-workout" class="primary">+ New workout</button>
+      <button id="btn-delete-workout" class="danger">Delete workout</button>
     </div>
   </section>
 
   <section class="card">
-    <div class="section-title">Notes</div>
-    <textarea id="notes" class="notes-area" placeholder="Anything you want to keep for Exercise…"></textarea>
+    <div class="totals">
+      <div class="total"><div class="value" id="t-exercises">0</div><div class="label">Exercises</div></div>
+      <div class="total"><div class="value" id="t-sets">0</div><div class="label">Sets</div></div>
+      <div class="total"><div class="value" id="t-volume">0</div><div class="label">Volume (wt × sets × reps)</div></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="table-wrap">
+      <table id="exercise-table">
+        <thead>
+          <tr>
+            <th>Exercise</th>
+            <th>Weight</th>
+            <th>Sets</th>
+            <th>Reps</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="exercise-body"></tbody>
+      </table>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button id="btn-add-row" class="primary">+ Add exercise</button>
+    </div>
+    <div class="hint">Each workout keeps its own list of exercises.</div>
   </section>
 </main>
 
@@ -35,6 +67,6 @@
 <script src="js/db.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/app.js"></script>
-<script src="js/section.js"></script>
+<script src="js/exercise.js"></script>
 </body>
 </html>

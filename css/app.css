@@ -248,7 +248,10 @@ tfoot td { font-weight: 700; }
 #spend-table td[data-label="Category"] input { text-align: left; }
 tr.reimbursed, tr.done { opacity: .55; }
 tr.done input[type="text"], tr.done input[type="date"] { text-decoration: line-through; }
-#daily-table td input[type="text"], #whimsy-table td input[type="text"] { text-align: left; }
+#daily-table td input[type="text"], #whimsy-table td input[type="text"],
+#exercise-table td input[type="text"] { text-align: left; }
+#exercise-table th:first-child { text-align: left; }
+#exercise-table th:last-child { text-align: right; }
 #daily-table th, #whimsy-table th { text-align: left; }
 #daily-table th:nth-last-child(-n+2), #whimsy-table th:nth-last-child(-n+2) { text-align: right; }
 td.line-total { font-variant-numeric: tabular-nums; }

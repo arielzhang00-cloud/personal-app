@@ -1,7 +1,7 @@
 /* Offline support: every page and asset is cached as it is fetched, so the most
    recent version stays available with no connection. Navigations are network-first
    (fresh when online) and fall back to the cached copy the moment the network fails. */
-var VERSION = 'v9';
+var VERSION = 'v10';
 var CACHE = 'life-hub-' + VERSION;
 
 var PRECACHE = [
@@ -25,6 +25,7 @@ var PRECACHE = [
   'js/budgeting.js',
   'js/dailies.js',
   'js/whimsy.js',
+  'js/exercise.js',
   'js/section.js',
   'icons/icon.svg',
   'manifest.webmanifest'
