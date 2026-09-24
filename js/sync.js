@@ -50,7 +50,7 @@
       method: 'POST', headers: headers(token), body: JSON.stringify(body)
     }).then(function (res) {
       if (!res.ok) return res.text().then(function (t) { throw new Error('push ' + res.status + ': ' + t); });
-      return global.DB.markClean(rows.map(function (r) { return r.id; }));
+      return global.DB.markClean(rows);
     });
   }
 

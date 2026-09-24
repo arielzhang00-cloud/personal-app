@@ -82,7 +82,18 @@
       };
       delete row.data.id;
       if (opts.fromRemote && record.updatedAt) row.updatedAt = record.updatedAt;
-      return tx(STORE, 'readwrite', function (store) { store.put(row); })
+      var write = opts.fromRemote
+        ? tx(STORE, 'readwrite', function (store) {
+            var req = store.get(row.id);
+            req.onsuccess = function () {
+              var local = req.result;
+              /* A local edit that has not reached the backend yet outranks the pull. */
+              if (local && local.dirty === 1 && local.updatedAt > row.updatedAt) return;
+              store.put(row);
+            };
+          })
+        : tx(STORE, 'readwrite', function (store) { store.put(row); });
+      return write
         .then(function () {
           emit(collection);
           if (!opts.fromRemote && global.Sync) global.Sync.schedule();
@@ -141,16 +152,17 @@
       });
     },
 
-    markClean: function (ids) {
+    /** Clears the dirty flag only on rows untouched since they were read for the push. */
+    markClean: function (rows) {
       return open().then(function (db) {
         return new Promise(function (resolve, reject) {
           var t = db.transaction(STORE, 'readwrite');
           var store = t.objectStore(STORE);
-          ids.forEach(function (id) {
-            var req = store.get(id);
+          rows.forEach(function (pushed) {
+            var req = store.get(pushed.id);
             req.onsuccess = function () {
               var row = req.result;
-              if (row) { row.dirty = 0; store.put(row); }
+              if (row && row.updatedAt === pushed.updatedAt) { row.dirty = 0; store.put(row); }
             };
           });
           t.oncomplete = resolve;

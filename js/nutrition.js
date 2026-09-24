@@ -6,11 +6,27 @@
   var ENTRIES = 'nutrition-entries';
   var SAVED = 'saved-items';
   var WEIGHTS = 'weights';
+  var MEASURES = 'measurements';
+
+  var SITES = [
+    { key: 'leftArm', label: 'Left arm', color: '#4da3ff' },
+    { key: 'rightArm', label: 'Right arm', color: '#7ee081' },
+    { key: 'waist', label: 'Waist', color: '#ffb057' },
+    { key: 'neck', label: 'Neck', color: '#ff7b7b' },
+    { key: 'leftThigh', label: 'Left thigh', color: '#9d7bff' },
+    { key: 'rightThigh', label: 'Right thigh', color: '#42d4c4' },
+    { key: 'leftAnkle', label: 'Left ankle', color: '#f28fd0' },
+    { key: 'rightAnkle', label: 'Right ankle', color: '#c9d44a' }
+  ];
 
   var $ = function (id) { return document.getElementById(id); };
   var num = App.num, round = App.round;
 
-  var state = { day: App.selectedDay(), entries: [], saved: [], weights: [], range: 7 };
+  var state = {
+    day: App.selectedDay(),
+    entries: [], saved: [], weights: [], measures: [],
+    range: 7, mRange: 7
+  };
 
   /* ---------------- totals ---------------- */
 
@@ -242,22 +258,26 @@
     });
   }
 
-  /* ---------------- weight chart ---------------- */
+  /* ---------------- charts ---------------- */
 
-  function pointsForRange(days) {
+  /** Day-indexed points for one field of a dated collection, over the `days`
+   *  window ending on the selected day. */
+  function seriesPoints(rows, key, days) {
     var end = new Date(state.day + 'T00:00:00');
     var start = new Date(end.getTime() - (days - 1) * 86400000);
-    return state.weights
-      .filter(function (w) {
-        var d = new Date(w.date + 'T00:00:00');
-        return d >= start && d <= end && w.weight !== '' && w.weight !== null;
+    return rows
+      .filter(function (r) {
+        var d = new Date(r.date + 'T00:00:00');
+        return d >= start && d <= end &&
+          r[key] !== '' && r[key] !== null && r[key] !== undefined;
       })
-      .map(function (w) { return { date: w.date, t: new Date(w.date + 'T00:00:00').getTime(), v: num(w.weight) }; })
+      .map(function (r) { return { t: new Date(r.date + 'T00:00:00').getTime(), v: num(r[key]) }; })
       .sort(function (a, b) { return a.t - b.t; });
   }
 
-  function drawChart() {
-    var canvas = $('weight-chart');
+  /** Draws any number of lines sharing one axis. Returns false when nothing
+   *  in the window has data. */
+  function drawLines(canvas, series, days, emptyText) {
     var dpr = window.devicePixelRatio || 1;
     var cssW = canvas.clientWidth || 320;
     var cssH = 260;
@@ -267,28 +287,30 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
 
-    var pts = pointsForRange(state.range);
-    var hint = $('chart-hint');
-    if (pts.length === 0) {
+    var drawn = series.filter(function (s) { return s.points.length; });
+    if (!drawn.length) {
       ctx.fillStyle = '#97a3b0';
       ctx.font = '14px system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('No weight logged in this range yet.', cssW / 2, cssH / 2);
-      hint.textContent = '';
-      return;
+      ctx.fillText(emptyText, cssW / 2, cssH / 2);
+      return false;
     }
 
     var padL = 44, padR = 12, padT = 14, padB = 26;
     var w = cssW - padL - padR, h = cssH - padT - padB;
     var end = new Date(state.day + 'T00:00:00').getTime();
-    var start = end - (state.range - 1) * 86400000;
-    var vals = pts.map(function (p) { return p.v; });
+    var start = end - (days - 1) * 86400000;
+
+    var vals = [];
+    drawn.forEach(function (s) {
+      s.points.forEach(function (p) { vals.push(p.v); });
+    });
     var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
     if (max - min < 1) { min -= 1; max += 1; }
     var padV = (max - min) * 0.12;
     min -= padV; max += padV;
 
-    var x = function (t) { return padL + (state.range === 1 ? w / 2 : ((t - start) / (end - start)) * w); };
+    var x = function (t) { return padL + (days === 1 ? w / 2 : ((t - start) / (end - start)) * w); };
     var y = function (v) { return padT + h - ((v - min) / (max - min)) * h; };
 
     ctx.strokeStyle = '#2b343e';
@@ -311,43 +333,137 @@
       ctx.fillText((d.getMonth() + 1) + '/' + d.getDate(), x(t), padT + h + 7);
     });
 
-    ctx.strokeStyle = '#4da3ff';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    pts.forEach(function (p, i) {
-      var px = x(p.t), py = y(p.v);
-      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    });
-    ctx.stroke();
-
-    ctx.fillStyle = '#4da3ff';
-    pts.forEach(function (p) {
+    drawn.forEach(function (s) {
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(x(p.t), y(p.v), 3.5, 0, Math.PI * 2);
-      ctx.fill();
+      s.points.forEach(function (p, i) {
+        var px = x(p.t), py = y(p.v);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+
+      ctx.fillStyle = s.color;
+      s.points.forEach(function (p) {
+        ctx.beginPath();
+        ctx.arc(x(p.t), y(p.v), 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
     });
 
+    return true;
+  }
+
+  function drawChart() {
+    var pts = seriesPoints(state.weights, 'weight', state.range);
+    var ok = drawLines(
+      $('weight-chart'),
+      [{ label: 'Weight', color: '#4da3ff', points: pts }],
+      state.range,
+      'No weight logged in this range yet.'
+    );
+    if (!ok) { $('chart-hint').textContent = ''; return; }
     var first = pts[0].v, last = pts[pts.length - 1].v;
     var delta = round(last - first, 1);
-    hint.textContent = pts.length + ' entries · ' + round(first, 1) + ' → ' + round(last, 1) +
-      ' lb (' + (delta > 0 ? '+' : '') + delta + ')';
+    $('chart-hint').textContent = pts.length + ' entries · ' + round(first, 1) + ' → ' +
+      round(last, 1) + ' lb (' + (delta > 0 ? '+' : '') + delta + ')';
+  }
+
+  /* ---------------- body measurements ---------------- */
+
+  function measureFor(day) {
+    return state.measures.filter(function (m) { return m.date === day; })[0] || null;
+  }
+
+  function renderMeasureInputs() {
+    var wrap = $('measure-inputs');
+    var row = measureFor(state.day) || {};
+    if (!wrap.childNodes.length) {
+      SITES.forEach(function (site) {
+        var input = App.el('input', {
+          type: 'number', id: 'm-' + site.key, step: '0.1',
+          inputmode: 'decimal', placeholder: '—'
+        });
+        input.addEventListener('input', function () { saveMeasure(site.key, input.value); });
+        var label = App.el('label', { class: 'field' }, [
+          App.el('span', { class: 'legend-item' }, [
+            App.el('span', { class: 'swatch', style: 'background:' + site.color }),
+            site.label
+          ])
+        ]);
+        label.appendChild(input);
+        wrap.appendChild(label);
+      });
+    }
+    SITES.forEach(function (site) {
+      var input = $('m-' + site.key);
+      if (document.activeElement === input) return;
+      var v = row[site.key];
+      input.value = v === undefined || v === null ? '' : v;
+    });
+  }
+
+  /* One row per day holds every site, so the value is applied immediately and
+     only the write is debounced — otherwise a quick edit to a second site
+     would replace the first one's pending save. */
+  function saveMeasure(key, value) {
+    var row = measureFor(state.day);
+    if (!row) {
+      row = { id: 'measure-' + state.day, date: state.day };
+      state.measures.push(row);
+    }
+    row[key] = value;
+    drawMeasureChart();
+    writeMeasure(row);
+  }
+
+  var writeMeasure = App.autosave(function (row) { DB.put(MEASURES, row); }, 400);
+
+  function drawMeasureChart() {
+    var series = SITES.map(function (site) {
+      return {
+        label: site.label,
+        color: site.color,
+        points: seriesPoints(state.measures, site.key, state.mRange)
+      };
+    });
+    var ok = drawLines(
+      $('measure-chart'), series, state.mRange,
+      'No measurements logged in this range yet.'
+    );
+
+    var legend = $('measure-legend');
+    legend.innerHTML = '';
+    var logged = 0;
+    series.forEach(function (s) {
+      if (!s.points.length) return;
+      logged++;
+      legend.appendChild(App.el('span', { class: 'legend-item' }, [
+        App.el('span', { class: 'swatch', style: 'background:' + s.color }),
+        s.label + ' ' + round(s.points[s.points.length - 1].v, 1)
+      ]));
+    });
+    $('measure-hint').textContent = ok ? logged + ' of ' + SITES.length + ' tracked in this range' : '';
   }
 
   /* ---------------- load / wire ---------------- */
 
   function load() {
-    return Promise.all([DB.all(ENTRIES), DB.all(SAVED), DB.all(WEIGHTS)])
+    return Promise.all([DB.all(ENTRIES), DB.all(SAVED), DB.all(WEIGHTS), DB.all(MEASURES)])
       .then(function (res) {
         state.entries = res[0].filter(function (e) { return e.date === state.day; })
           .sort(function (a, b) { return (a.updatedAt || '').localeCompare(b.updatedAt || ''); });
         state.saved = res[1];
         state.weights = res[2];
+        state.measures = res[3];
         var w = weightFor(state.day);
         if (document.activeElement !== $('weight')) $('weight').value = w === null ? '' : w;
         renderTotals();
         renderTable();
         renderSavedOptions();
         drawChart();
+        renderMeasureInputs();
+        drawMeasureChart();
       });
   }
 
@@ -428,17 +544,25 @@
       });
     });
 
-    window.addEventListener('resize', App.autosave(drawChart, 150));
+    window.addEventListener('resize', App.autosave(function () {
+      drawChart();
+      drawMeasureChart();
+    }, 150));
 
-    Array.prototype.forEach.call($('ranges').querySelectorAll('button'), function (btn) {
-      btn.addEventListener('click', function () {
-        state.range = parseInt(btn.dataset.range, 10);
-        Array.prototype.forEach.call($('ranges').querySelectorAll('button'), function (b) {
-          b.setAttribute('aria-pressed', String(b === btn));
+    function wireRanges(id, apply) {
+      var buttons = $(id).querySelectorAll('button');
+      Array.prototype.forEach.call(buttons, function (btn) {
+        btn.addEventListener('click', function () {
+          Array.prototype.forEach.call(buttons, function (b) {
+            b.setAttribute('aria-pressed', String(b === btn));
+          });
+          apply(parseInt(btn.dataset.range, 10));
         });
-        drawChart();
       });
-    });
+    }
+
+    wireRanges('ranges', function (days) { state.range = days; drawChart(); });
+    wireRanges('m-ranges', function (days) { state.mRange = days; drawMeasureChart(); });
 
     DB.onChange(ENTRIES, function () {});
     load();
